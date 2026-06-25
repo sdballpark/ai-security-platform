@@ -1,0 +1,74 @@
+[package]
+name = "prompt-injection-engine"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.74"
+description = "Fast, signature-driven detection engine for prompt-injection, jailbreak, and data-exfiltration patterns in LLM inputs and outputs."
+license = "MIT"
+readme = "README.md"
+keywords = ["llm", "security", "prompt-injection", "jailbreak", "ai-security"]
+categories = ["text-processing", "command-line-utilities"]
+
+# The library is the core consumed by the Go gateway (output scanning) and the
+# TypeScript MCP firewall (input validation). The binary is a thin CLI wrapper
+# so the same logic is usable in CI, pre-commit hooks, and ad-hoc triage.
+[lib]
+name = "pie"
+path = "src/lib.rs"
+
+[[bin]]
+name = "pie"
+path = "src/main.rs"
+
+[dependencies]
+# serde + toml: signature packs are authored as data (TOML), not hardcoded in
+# Rust. This lets a security engineer add/modify signatures and ship a new pack
+# without recompiling the engine — see README "Why TOML for signatures".
+# toml pinned to 0.8.8 so its transitive winnow/toml_edit stay edition-2021.
+serde = { version = "1", features = ["derive"] }
+toml = "=0.8.8"
+
+# indexmap is a transitive dep (via toml_edit). Declared directly only to CAP it
+# at the last edition-2021 release; 2.10+ requires the edition-2024 cargo feature
+# the pinned toolchain doesn't stabilize. Not referenced in code.
+indexmap = "=2.6.0"
+
+# regex: signature matching. `regex` is RE2-style (no catastrophic backtracking),
+# which is itself a security property — an attacker cannot craft an input that
+# turns our own detector into a ReDoS denial-of-service vector.
+regex = "1"
+
+# clap: CLI arg parsing. `derive` feature keeps the surface declarative.
+# Pinned to 4.4.x: later clap_lex requires the edition-2024 feature, which the
+# pinned toolchain (1.75) does not stabilize. A reproducible build against a
+# known-good toolchain beats chasing latest — relevant to supply-chain hygiene.
+clap = { version = "=4.4.18", features = ["derive"] }
+
+# anyhow + thiserror: anyhow for the binary (ergonomic ? on errors), thiserror
+# for the library (typed errors callers can match on across the FFI/JSON edge).
+anyhow = "1"
+thiserror = "1"
+
+# serde_json: the CLI emits JSON verdicts so the Go and TS layers can consume
+# detections programmatically; the test corpora are JSONL.
+serde_json = "1"
+
+# base64: the encoding detector DECODES candidate payloads and re-scans the
+# plaintext, rather than naively regexing for "looks like base64". Decoding is
+# the only way to catch an instruction smuggled past a filter as an encoded blob.
+base64 = "0.22"
+
+[dev-dependencies]
+# criterion: throughput benchmarks. The Rust value proposition for this layer is
+# "fast + memory-safe," and a bench makes that claim measurable instead of asserted.
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[[bench]]
+name = "throughput"
+harness = false
+
+[profile.release]
+# Detection sits on the hot path of every model request via the gateway, so the
+# release profile is tuned for latency: LTO + a single codegen unit.
+lto = true
+codegen-units = 1

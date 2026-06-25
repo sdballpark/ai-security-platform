@@ -1,0 +1,180 @@
+# Default signature pack for prompt-injection-engine (`pie`).
+#
+# Patterns are matched against NORMALIZED input (lowercased, zero-width stripped,
+# whitespace collapsed), so patterns are written lowercase without (?i). The
+# `regex` crate is RE2-style: no backreferences or lookarounds, and — importantly
+# — no catastrophic backtracking, so a signature here cannot be turned into a
+# ReDoS vector by a crafted input.
+#
+# Each signature documents the threat it addresses in `rationale`. Tune severities
+# to your surface: a participant-facing channel may treat "medium" as blocking.
+
+# ─────────────────────────── instruction override (LLM01) ───────────────────────
+[[signature]]
+id = "io-001"
+category = "instruction_override"
+pattern = 'ignore (all |any |the )?(previous|prior|above|preceding) (instruction|instructions|prompt|prompts|context|direction|directions)'
+severity = "high"
+owasp = "LLM01"
+atlas = "AML.T0051.000"
+rationale = "Canonical direct-injection lead-in. Attacker tries to void the system prompt before issuing their own."
+
+[[signature]]
+id = "io-002"
+category = "instruction_override"
+pattern = 'disregard (all |any |the )?(previous|prior|above|earlier) (instruction|instructions|rule|rules|guidance)'
+severity = "high"
+owasp = "LLM01"
+atlas = "AML.T0051.000"
+rationale = "Synonym variant of io-001 using 'disregard' — the same override intent with different surface phrasing."
+
+[[signature]]
+id = "io-003"
+category = "instruction_override"
+pattern = 'forget (everything|all|what) (you|i) (were|was|have been) (told|instructed|programmed)'
+severity = "high"
+owasp = "LLM01"
+atlas = "AML.T0051.000"
+rationale = "Memory-reset framing intended to discard prior constraints."
+
+[[signature]]
+id = "io-004"
+category = "instruction_override"
+pattern = 'new instruction(s)?:? (from now|going forward|you (will|must|should))'
+severity = "medium"
+owasp = "LLM01"
+atlas = "AML.T0051.000"
+rationale = "Attempt to install replacement instructions. Medium alone; high in combination with an override lead-in."
+
+[[signature]]
+id = "io-005"
+category = "instruction_override"
+pattern = 'do not (tell|inform|alert|warn) (the user|anyone|them)'
+severity = "high"
+owasp = "LLM01"
+atlas = "AML.T0051.000"
+rationale = "Covert-action framing — instructs the model to act against the user's interest while hiding it."
+
+# ─────────────────────────────── role hijack (LLM01) ────────────────────────────
+[[signature]]
+id = "rh-001"
+category = "role_hijack"
+pattern = 'you are (now |currently )?(dan|stan|dude|do anything now|an unrestricted|a jailbroken)'
+severity = "high"
+owasp = "LLM01"
+atlas = "AML.T0054"
+rationale = "Named jailbreak personas (DAN family). Persona swap is the classic guardrail-bypass vector."
+
+[[signature]]
+id = "rh-002"
+category = "role_hijack"
+pattern = '(act|behave|respond|roleplay) as (an? )?(unrestricted|unfiltered|uncensored|amoral|evil|jailbroken)'
+severity = "high"
+owasp = "LLM01"
+atlas = "AML.T0054"
+rationale = "Persona instruction by attribute rather than name — catches novel personas the named list misses."
+
+[[signature]]
+id = "rh-003"
+category = "role_hijack"
+pattern = 'pretend (you|that you) (have no|don.t have|are free from) (rules|restrictions|filters|guidelines|limitations)'
+severity = "high"
+owasp = "LLM01"
+atlas = "AML.T0054"
+rationale = "Explicit request to suspend safety constraints via pretense."
+
+[[signature]]
+id = "rh-004"
+category = "role_hijack"
+pattern = '(developer|debug|god|admin|sudo) mode (enabled|on|activated)'
+severity = "medium"
+owasp = "LLM01"
+atlas = "AML.T0054"
+rationale = "Fake privileged-mode framing to coax the model into believing restrictions are lifted."
+
+[[signature]]
+id = "rh-005"
+category = "role_hijack"
+pattern = 'there are no (rules|restrictions|guidelines|limits|filters) (here|now|anymore|in this)'
+severity = "medium"
+owasp = "LLM01"
+atlas = "AML.T0054"
+rationale = "Environment-reframing: convinces the model the safety context no longer applies."
+
+# ─────────────────────────────── delimiter (LLM01) ──────────────────────────────
+[[signature]]
+id = "dl-001"
+category = "delimiter"
+pattern = '<\|(system|im_start|im_end|endoftext)\|>'
+severity = "high"
+owasp = "LLM01"
+atlas = "AML.T0051.000"
+rationale = "Injected chat-template special tokens, used to forge a system turn or close the user turn early."
+
+[[signature]]
+id = "dl-002"
+category = "delimiter"
+pattern = '(### *|--- *|\[ *)(end|start) of (prompt|system|instructions|context)'
+severity = "medium"
+owasp = "LLM01"
+atlas = "AML.T0051.000"
+rationale = "Fake markdown/bracket boundary markers that try to convince the model the trusted context has ended."
+
+[[signature]]
+id = "dl-003"
+category = "delimiter"
+pattern = '(system|assistant) *: *(you must|you will|ignore|now)'
+severity = "medium"
+owasp = "LLM01"
+atlas = "AML.T0051.000"
+rationale = "Forged role label inside user text, impersonating a system/assistant turn."
+
+# ───────────────────────── exfil markers (LLM02) ────────────────────────────────
+[[signature]]
+id = "ex-001"
+category = "exfil_markers"
+pattern = '(print|repeat|reveal|show|display|output|tell me) (your |the |me your )?(system prompt|initial prompt|instructions|system message)'
+severity = "high"
+owasp = "LLM02"
+atlas = "AML.T0057"
+rationale = "System-prompt extraction — the most common data-leakage attempt against an LLM app."
+
+[[signature]]
+id = "ex-002"
+category = "exfil_markers"
+pattern = '(list|dump|show|reveal|enumerate|give me) (all|every|the) ([a-z]+ )?(records|rows|users|accounts|customers?|participants?|data|entries|documents|files)'
+severity = "high"
+owasp = "LLM02"
+atlas = "AML.T0057"
+rationale = "Attempt to enumerate sensitive records reachable through retrieval/tooling — tenant-isolation probe. Optional adjective slot catches 'all customer records', not just 'all records'."
+
+[[signature]]
+id = "ex-003"
+category = "exfil_markers"
+pattern = '(what|repeat) (was|were|is) (written|said|stated) (above|before this|in your context)'
+severity = "medium"
+owasp = "LLM02"
+atlas = "AML.T0057"
+rationale = "Indirect context-extraction phrasing that avoids the literal words 'system prompt'."
+
+[[signature]]
+id = "ex-004"
+category = "exfil_markers"
+pattern = '(verbatim|word for word|exactly as written|character for character)'
+severity = "low"
+owasp = "LLM02"
+atlas = "AML.T0057"
+rationale = "Verbatim-reproduction qualifier — weak alone, but a useful co-signal alongside an exfil request."
+
+# ─────────────────────────── encoding co-signals (LLM01) ────────────────────────
+# The encoding DETECTOR decodes payloads and re-scans them against every signature
+# above. These two are surface co-signals for the imperative wrapper an attacker
+# puts AROUND an encoded blob; they raise confidence but are not the primary catch.
+[[signature]]
+id = "en-001"
+category = "encoding"
+pattern = '(decode|base64 decode|from base64|un-?escape|de-?obfuscate) (this|the following|and (run|execute|follow))'
+severity = "medium"
+owasp = "LLM01"
+atlas = "AML.T0051.000"
+rationale = "Imperative wrapper instructing the model to decode-then-obey — the tell of an encoding-smuggled payload."
