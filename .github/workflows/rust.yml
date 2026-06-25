@@ -1,0 +1,44 @@
+name: rust
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'prompt-injection-engine/**'
+      - '.github/workflows/rust.yml'
+  pull_request:
+    paths:
+      - 'prompt-injection-engine/**'
+      - '.github/workflows/rust.yml'
+
+jobs:
+  build-test:
+    name: pie — build, lint, adversarial-corpus gate
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: prompt-injection-engine
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache cargo artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: prompt-injection-engine
+
+      - name: Formatting
+        run: cargo fmt --all -- --check
+
+      - name: Lint (warnings are errors)
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: Test (includes corpus-backed detection gate)
+        run: cargo test --all
+
+      - name: Benchmarks compile
+        run: cargo bench --no-run

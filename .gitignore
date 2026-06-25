@@ -1,0 +1,8 @@
+# Rust
+prompt-injection-engine/target/
+**/*.rs.bk
+
+# Go
+ai-gateway/gateway
+**/*.test
+**/*.out
