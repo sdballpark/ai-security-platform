@@ -13,7 +13,7 @@
 [[signature]]
 id = "io-001"
 category = "instruction_override"
-pattern = 'ignore (all |any |the )?(previous|prior|above|preceding) (instruction|instructions|prompt|prompts|context|direction|directions)'
+pattern = 'ignore (all |any |the )?(previous|prior|above|preceding)[^.\n]{0,30}?(instruction|instructions|prompt|prompts|context|direction|directions)'
 severity = "high"
 owasp = "LLM01"
 atlas = "AML.T0051.000"
@@ -22,7 +22,7 @@ rationale = "Canonical direct-injection lead-in. Attacker tries to void the syst
 [[signature]]
 id = "io-002"
 category = "instruction_override"
-pattern = 'disregard (all |any |the )?(previous|prior|above|earlier) (instruction|instructions|rule|rules|guidance)'
+pattern = 'disregard (all |any |the )?(previous|prior|above|earlier)[^.\n]{0,30}?(instruction|instructions|rule|rules|guidance)'
 severity = "high"
 owasp = "LLM01"
 atlas = "AML.T0051.000"
@@ -31,7 +31,7 @@ rationale = "Synonym variant of io-001 using 'disregard' — the same override i
 [[signature]]
 id = "io-003"
 category = "instruction_override"
-pattern = 'forget (everything|all|what) (you|i) (were|was|have been) (told|instructed|programmed)'
+pattern = 'forget (everything|all|what) (you|i) (were|was|have been)[^.\n]{0,20}?(told|instructed|programmed)'
 severity = "high"
 owasp = "LLM01"
 atlas = "AML.T0051.000"
