@@ -60,6 +60,15 @@ cd ai-gateway && go test -race ./...
 CI runs per-subtree via path-filtered workflows in `.github/workflows/`, so a
 change to one component only triggers that component's pipeline.
 
+
+## Author
+
+**Robert Bogan**
+
+AI Security & Governance Engineer | CISSP, CISM, CRISC
+
+[LinkedIn](https://www.linkedin.com/in/robert-l-bogan-jr)
+
 ## License
 
 MIT — original work. No proprietary logic from any prior employer.
