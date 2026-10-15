@@ -35,6 +35,10 @@ type Gateway struct {
 	Log          *slog.Logger
 }
 
+// upstreamOnly headers describe the provider's server stack and are not relayed
+// to the client.
+var upstreamOnly = map[string]bool{"Server": true, "X-Powered-By": true}
+
 // hopByHop headers must not be forwarded between client and upstream.
 var hopByHop = map[string]bool{
 	"Connection": true, "Proxy-Connection": true, "Keep-Alive": true,
@@ -61,9 +65,15 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 3. Read the request body under a hard cap.
-	body, err := io.ReadAll(io.LimitReader(r.Body, g.MaxBodyBytes))
+	//    Read one byte past the cap so an oversized body is rejected, not silently
+	//    truncated and forwarded.
+	body, err := io.ReadAll(io.LimitReader(r.Body, g.MaxBodyBytes+1))
 	if err != nil {
 		g.deny(w, r, http.StatusBadRequest, "cannot read request body", "body_read_error", start, &t)
+		return
+	}
+	if int64(len(body)) > g.MaxBodyBytes {
+		g.deny(w, r, http.StatusRequestEntityTooLarge, "request body too large", "body_too_large", start, &t)
 		return
 	}
 
@@ -98,9 +108,14 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// 7. Buffer the response. Scanning for exfil requires the whole body; a token
 	//    stream can't be reliably scanned without a sliding-window buffer anyway,
 	//    so we buffer and accept the loss of streaming on this control path.
-	respBody, err := io.ReadAll(io.LimitReader(resp.Body, g.MaxBodyBytes))
+	respBody, err := io.ReadAll(io.LimitReader(resp.Body, g.MaxBodyBytes+1))
 	if err != nil {
 		g.deny(w, r, http.StatusBadGateway, "cannot read upstream response", "upstream_read_error", start, &t)
+		return
+	}
+	if int64(len(respBody)) > g.MaxBodyBytes {
+		// Fail closed: a truncated response cannot be fully scanned, so it is not relayed.
+		g.deny(w, r, http.StatusBadGateway, "upstream response too large", "upstream_too_large", start, &t)
 		return
 	}
 
@@ -113,7 +128,7 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// 9. Relay the clean response to the client.
 	for k, vals := range resp.Header {
-		if hopByHop[k] {
+		if hopByHop[k] || upstreamOnly[k] {
 			continue
 		}
 		for _, v := range vals {
@@ -183,24 +198,22 @@ func (g *Gateway) blocked(w http.ResponseWriter, r *http.Request, status int, di
 	if t != nil {
 		tenantID = t.ID
 	}
+	// Detector detail goes to the audit log only. Returning it to the caller would
+	// tell an attacker which signature fired, turning each block into feedback for
+	// the next evasion attempt.
+	detectors := make([]string, 0, len(ds))
+	for _, d := range ds {
+		detectors = append(detectors, d.Source+":"+d.Detector)
+	}
 	g.Log.Warn("blocked",
 		"tenant", tenantID, "direction", direction, "status", status,
 		"max_severity", string(scanner.MaxSeverity(ds)), "detections", len(ds),
+		"detectors", strings.Join(detectors, ","),
 		"path", r.URL.Path, "latency_ms", time.Since(start).Milliseconds(),
 	)
-	// Surface finding metadata (detector/category/severity), which is safe — the
-	// excerpts were redacted at the scanner — but not the original content.
-	findings := make([]map[string]any, 0, len(ds))
-	for _, d := range ds {
-		findings = append(findings, map[string]any{
-			"source": d.Source, "detector": d.Detector, "category": d.Category,
-			"severity": string(d.Severity), "owasp": d.OWASP, "atlas": d.ATLAS,
-		})
-	}
 	writeJSON(w, status, map[string]any{
 		"error":     "request blocked by AI security policy",
 		"direction": direction,
-		"findings":  findings,
 	})
 }
 
